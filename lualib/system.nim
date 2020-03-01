@@ -1977,7 +1977,7 @@ template sysAssert(cond: bool, msg: string) =
       cstderr.rawWrite "\n"
       quit 1
 
-const hasAlloc = (hostOS != "standalone" or not defined(nogc)) and not defined(nimscript)
+const hasAlloc = false and (hostOS != "standalone" or not defined(nogc)) and not defined(nimscript)
 
 when not defined(gcDestructors) or defined(nimscript):
   proc add*[T](x: var seq[T], y: T) {.magic: "AppendSeqElem", noSideEffect.}
@@ -2206,6 +2206,10 @@ proc addQuitProc*(quitProc: proc() {.noconv.}) {.
 # In case of an unhandled exception the exit handlers should
 # not be called explicitly! The user may decide to do this manually though.
 
+{.pragma: rtl, gcsafe.}
+{.pragma: benign, gcsafe.}
+{.pragma: inl, inline.}
+{.pragma: compilerRtl, compilerproc.}
 when not defined(nimscript):
   when hasAlloc:
     proc alloc*(size: Natural): pointer {.noconv, rtl, tags: [], benign, raises: [].}
@@ -2296,97 +2300,98 @@ when not defined(nimscript):
       ## The freed memory must belong to its allocating thread!
       ## Use `deallocShared <#deallocShared,pointer>`_ to deallocate from a shared heap.
 
-    proc allocShared*(size: Natural): pointer {.noconv, rtl, benign, raises: [].}
-      ## Allocates a new memory block on the shared heap with at
-      ## least ``size`` bytes.
-      ##
-      ## The block has to be freed with
-      ## `reallocShared(block, 0) <#reallocShared,pointer,Natural>`_
-      ## or `deallocShared(block) <#deallocShared,pointer>`_.
-      ##
-      ## The block is not initialized, so reading from it before writing
-      ## to it is undefined behaviour!
-      ##
-      ## See also:
-      ## `allocShared0 <#allocShared0,Natural>`_.
-    proc createSharedU*(T: typedesc, size = 1.Positive): ptr T {.inline,
-                                                                 benign, raises: [].} =
-      ## Allocates a new memory block on the shared heap with at
-      ## least ``T.sizeof * size`` bytes.
-      ##
-      ## The block has to be freed with
-      ## `resizeShared(block, 0) <#resizeShared,ptr.T,Natural>`_ or
-      ## `freeShared(block) <#freeShared,ptr.T>`_.
-      ##
-      ## The block is not initialized, so reading from it before writing
-      ## to it is undefined behaviour!
-      ##
-      ## See also:
-      ## * `createShared <#createShared,typedesc>`_
-      cast[ptr T](allocShared(T.sizeof * size))
+    when false:
+      proc allocShared*(size: Natural): pointer {.noconv, rtl, benign, raises: [].}
+        ## Allocates a new memory block on the shared heap with at
+        ## least ``size`` bytes.
+        ##
+        ## The block has to be freed with
+        ## `reallocShared(block, 0) <#reallocShared,pointer,Natural>`_
+        ## or `deallocShared(block) <#deallocShared,pointer>`_.
+        ##
+        ## The block is not initialized, so reading from it before writing
+        ## to it is undefined behaviour!
+        ##
+        ## See also:
+        ## `allocShared0 <#allocShared0,Natural>`_.
+      proc createSharedU*(T: typedesc, size = 1.Positive): ptr T {.inline,
+                                                                  benign, raises: [].} =
+        ## Allocates a new memory block on the shared heap with at
+        ## least ``T.sizeof * size`` bytes.
+        ##
+        ## The block has to be freed with
+        ## `resizeShared(block, 0) <#resizeShared,ptr.T,Natural>`_ or
+        ## `freeShared(block) <#freeShared,ptr.T>`_.
+        ##
+        ## The block is not initialized, so reading from it before writing
+        ## to it is undefined behaviour!
+        ##
+        ## See also:
+        ## * `createShared <#createShared,typedesc>`_
+        cast[ptr T](allocShared(T.sizeof * size))
 
-    proc allocShared0*(size: Natural): pointer {.noconv, rtl, benign, raises: [].}
-      ## Allocates a new memory block on the shared heap with at
-      ## least ``size`` bytes.
-      ##
-      ## The block has to be freed with
-      ## `reallocShared(block, 0) <#reallocShared,pointer,Natural>`_
-      ## or `deallocShared(block) <#deallocShared,pointer>`_.
-      ##
-      ## The block is initialized with all bytes
-      ## containing zero, so it is somewhat safer than
-      ## `allocShared <#allocShared,Natural>`_.
-    proc createShared*(T: typedesc, size = 1.Positive): ptr T {.inline.} =
-      ## Allocates a new memory block on the shared heap with at
-      ## least ``T.sizeof * size`` bytes.
-      ##
-      ## The block has to be freed with
-      ## `resizeShared(block, 0) <#resizeShared,ptr.T,Natural>`_ or
-      ## `freeShared(block) <#freeShared,ptr.T>`_.
-      ##
-      ## The block is initialized with all bytes
-      ## containing zero, so it is somewhat safer than
-      ## `createSharedU <#createSharedU,typedesc>`_.
-      cast[ptr T](allocShared0(T.sizeof * size))
+      proc allocShared0*(size: Natural): pointer {.noconv, rtl, benign, raises: [].}
+        ## Allocates a new memory block on the shared heap with at
+        ## least ``size`` bytes.
+        ##
+        ## The block has to be freed with
+        ## `reallocShared(block, 0) <#reallocShared,pointer,Natural>`_
+        ## or `deallocShared(block) <#deallocShared,pointer>`_.
+        ##
+        ## The block is initialized with all bytes
+        ## containing zero, so it is somewhat safer than
+        ## `allocShared <#allocShared,Natural>`_.
+      proc createShared*(T: typedesc, size = 1.Positive): ptr T {.inline.} =
+        ## Allocates a new memory block on the shared heap with at
+        ## least ``T.sizeof * size`` bytes.
+        ##
+        ## The block has to be freed with
+        ## `resizeShared(block, 0) <#resizeShared,ptr.T,Natural>`_ or
+        ## `freeShared(block) <#freeShared,ptr.T>`_.
+        ##
+        ## The block is initialized with all bytes
+        ## containing zero, so it is somewhat safer than
+        ## `createSharedU <#createSharedU,typedesc>`_.
+        cast[ptr T](allocShared0(T.sizeof * size))
 
-    proc reallocShared*(p: pointer, newSize: Natural): pointer {.noconv, rtl,
-                                                                 benign, raises: [].}
-      ## Grows or shrinks a given memory block on the heap.
-      ##
-      ## If `p` is **nil** then a new memory block is returned.
-      ## In either way the block has at least ``newSize`` bytes.
-      ## If ``newSize == 0`` and `p` is not **nil** ``reallocShared`` calls
-      ## ``deallocShared(p)``.
-      ## In other cases the block has to be freed with
-      ## `deallocShared <#deallocShared,pointer>`_.
-    proc resizeShared*[T](p: ptr T, newSize: Natural): ptr T {.inline, raises: [].} =
-      ## Grows or shrinks a given memory block on the heap.
-      ##
-      ## If `p` is **nil** then a new memory block is returned.
-      ## In either way the block has at least ``T.sizeof * newSize`` bytes.
-      ## If ``newSize == 0`` and `p` is not **nil** ``resizeShared`` calls
-      ## ``freeShared(p)``.
-      ## In other cases the block has to be freed with
-      ## `freeShared <#freeShared,ptr.T>`_.
-      cast[ptr T](reallocShared(p, T.sizeof * newSize))
+      proc reallocShared*(p: pointer, newSize: Natural): pointer {.noconv, rtl,
+                                                                  benign, raises: [].}
+        ## Grows or shrinks a given memory block on the heap.
+        ##
+        ## If `p` is **nil** then a new memory block is returned.
+        ## In either way the block has at least ``newSize`` bytes.
+        ## If ``newSize == 0`` and `p` is not **nil** ``reallocShared`` calls
+        ## ``deallocShared(p)``.
+        ## In other cases the block has to be freed with
+        ## `deallocShared <#deallocShared,pointer>`_.
+      proc resizeShared*[T](p: ptr T, newSize: Natural): ptr T {.inline, raises: [].} =
+        ## Grows or shrinks a given memory block on the heap.
+        ##
+        ## If `p` is **nil** then a new memory block is returned.
+        ## In either way the block has at least ``T.sizeof * newSize`` bytes.
+        ## If ``newSize == 0`` and `p` is not **nil** ``resizeShared`` calls
+        ## ``freeShared(p)``.
+        ## In other cases the block has to be freed with
+        ## `freeShared <#freeShared,ptr.T>`_.
+        cast[ptr T](reallocShared(p, T.sizeof * newSize))
 
-    proc deallocShared*(p: pointer) {.noconv, rtl, benign, raises: [].}
-      ## Frees the memory allocated with ``allocShared``, ``allocShared0`` or
-      ## ``reallocShared``.
-      ##
-      ## **This procedure is dangerous!**
-      ## If one forgets to free the memory a leak occurs; if one tries to
-      ## access freed memory (or just freeing it twice!) a core dump may happen
-      ## or other memory may be corrupted.
-    proc freeShared*[T](p: ptr T) {.inline, benign, raises: [].} =
-      ## Frees the memory allocated with ``createShared``, ``createSharedU`` or
-      ## ``resizeShared``.
-      ##
-      ## **This procedure is dangerous!**
-      ## If one forgets to free the memory a leak occurs; if one tries to
-      ## access freed memory (or just freeing it twice!) a core dump may happen
-      ## or other memory may be corrupted.
-      deallocShared(p)
+      proc deallocShared*(p: pointer) {.noconv, rtl, benign, raises: [].}
+        ## Frees the memory allocated with ``allocShared``, ``allocShared0`` or
+        ## ``reallocShared``.
+        ##
+        ## **This procedure is dangerous!**
+        ## If one forgets to free the memory a leak occurs; if one tries to
+        ## access freed memory (or just freeing it twice!) a core dump may happen
+        ## or other memory may be corrupted.
+      proc freeShared*[T](p: ptr T) {.inline, benign, raises: [].} =
+        ## Frees the memory allocated with ``createShared``, ``createSharedU`` or
+        ## ``resizeShared``.
+        ##
+        ## **This procedure is dangerous!**
+        ## If one forgets to free the memory a leak occurs; if one tries to
+        ## access freed memory (or just freeing it twice!) a core dump may happen
+        ## or other memory may be corrupted.
+        deallocShared(p)
 
 proc swap*[T](a, b: var T) {.magic: "Swap", noSideEffect.}
   ## Swaps the values `a` and `b`.
@@ -3316,6 +3321,7 @@ type
 
 when not defined(nimscript):
   # TODO: add magics
+  include luasys
 else:
   proc cmp(x, y: string): int =
     if x == y: return 0

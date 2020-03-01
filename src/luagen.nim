@@ -718,6 +718,7 @@ proc genTry(p: Proc, n: PNode, r: var TCompRes) =
   var a: TCompRes
   gen(p, n.sons[0], a)
   moveInto(p, a, r)
+  lineF(p, "end)$n", [])
   var generalCatchBranchExists = false
   if catchBranchesExist:
     addf(p.body, "excHandler = excHandler - 1$nend$nif anyEXC then local prevLuaError = lastLuaError$n" &
@@ -957,7 +958,8 @@ proc genIf(p: Proc, n: PNode, r: var TCompRes) =
       lineF(p, "else$n", [])
       p.nested: gen(p, it.sons[0], stmt)
     moveInto(p, stmt, r)
-    lineF(p, "end$n", [])
+    if i == len(n) - 1:
+      lineF(p, "end$n", [])
   line(p, repeat("end", toClose) & "\L")
 
 proc generateHeader(p: Proc, typ: PType): Rope =
@@ -1212,7 +1214,7 @@ proc genArrayAccess(p: Proc, n: PNode, r: var TCompRes) =
       r.address = "$1[1]" % [x]
       r.res = "$1[2]" % [x]
   else:
-    r.res = "$1[$2 + 1]" % [r.address, r.res]
+    r.res = "$1[$2]" % [r.address, r.res]
   r.kind = resExpr
 
 template isIndirect(x: PSym): bool =
@@ -1400,7 +1402,7 @@ proc genArg(p: Proc, n: PNode, param: PSym, r: var TCompRes; emitted: ptr int = 
   gen(p, n, a)
   if skipTypes(param.typ, abstractVar).kind in {tyOpenArray, tyVarargs} and
       a.typ == etyBaseIndex:
-    add(r.res, "$1[$2 + 1]" % [a.address, a.res])
+    add(r.res, "$1[$2]" % [a.address, a.res])
   elif a.typ == etyBaseIndex:
     add(r.res, a.address)
     add(r.res, ", ")
